@@ -1,0 +1,30 @@
+{
+  "name": "transaction-describer",
+  "version": "0.0.0",
+  "description": "Transaction Describer",
+  "main": "src/index.ts",
+  "scripts": {
+    "start": "pnpm pm2",
+    "dev": "nodemon src/index.ts -w . -w .env -e ts,js,mjs,json,env",
+    "build": "tsc --outDir build",
+    "pm2": "pnpm build && pm2 start build/index.js --name transaction-describer",
+    "node": "ts-node src/index.ts"
+  },
+  "author": "Ariady Putra",
+  "license": "ISC",
+  "dependencies": {
+    "@lucid-evolution/lucid": "0.4.27",
+    "bech32": "2.0.0",
+    "dotenv": "16.5.0",
+    "express": "4.21.2",
+    "express-rate-limit": "7.5.0",
+    "pm2": "6.0.5"
+  },
+  "devDependencies": {
+    "@types/express": "5.0.1",
+    "@types/node": "22.14.1",
+    "nodemon": "3.1.9",
+    "ts-node": "10.9.2",
+    "typescript": "5.8.3"
+  }
+}
