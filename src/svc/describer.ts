@@ -132,6 +132,7 @@ export async function describeAddressTransaction(address: string, hash: string):
     if (scDesc[address]) {
       type = scDesc[address].category;
       description = scDesc[address].description;
+      probableProjects.add(scDesc[address].projectName);
     }
   }
   //#endregion

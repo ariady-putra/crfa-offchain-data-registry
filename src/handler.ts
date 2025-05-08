@@ -48,6 +48,7 @@ function _log(client: string,
 }
 
 function _respondError(resp: Response, error: any, status: number = 500) {
+  console.error(error);
   resp
     .status(error.status_code ?? status)
     .json({ error: error.message ?? error });
