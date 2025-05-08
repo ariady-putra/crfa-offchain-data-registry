@@ -47,14 +47,15 @@ export async function calcConfidenceScoreOf(
         txUTXOs,
       )];
 
-  // maybe multiple dApps transactions are composed into this 1 transaction
-  // in the future we can do something with it and not just sorting and take the highest confidence
+  // maybe multiple dApps transactions are composed into this 1 transaction, in the future we can take the 2nd and 3rd confidence as well
+  // that is why right now we're sorting this, even though only the highest one is taken at the moment
   const confidenceDesc = projectsConfidence.sort(
     (l, r) => {
       return (r.confidence ?? 0) - (l.confidence ?? 0);
     });
 
   const highestConfidence = confidenceDesc[0];
+  // if the highest confidence is below threshold (ie, 50), then use fallback because the description is likely to be wrong
   if (highestConfidence.confidence && highestConfidence.confidence <= 50) {
     const fallbackConfidence =
       probableProjects.length
@@ -111,7 +112,7 @@ async function confidenceOf(
     });
 
   const { type, description, score } = scoresDesc[0];
-  const adjustedScore = (score - .9) < 0 ? (score / 2) : ((score - .9) * 5 + .5);
+  const adjustedScore = (score < .9) ? (score / 2) : ((score - .9) * 5 + .5);
   const confidence = Math.round(adjustedScore * maxConfidence);
 
   return { type, description, confidence };
