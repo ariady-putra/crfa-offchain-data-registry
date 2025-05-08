@@ -46,7 +46,7 @@ export async function score(
     });
 
   const sendTokens = Object.keys(totalTokens)
-    .filter((currency) => totalTokens[currency])
+    .filter((currency) => totalTokens[currency] > 0)
     .map((currency) => `${totalTokens[currency]} ${currency}${totalTokens[currency] > 1 ? "s" : ""}`);
 
   let sentTokens = "Sent";
