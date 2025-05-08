@@ -15,8 +15,14 @@ async function req(path: string) {
   return json;
 }
 
+export const getAddressInfo = (address: string) =>
+  req(`/addresses/${address}`);
+
 export const getAddressTransactions = (address: string) =>
   req(`/addresses/${address}/transactions?order=desc`);
+
+export const getTransactionInfo = (hash: string) =>
+  req(`/txs/${hash}`);
 
 export const getTransactionUTXOs = (hash: string) =>
   req(`/txs/${hash}/utxos`);
@@ -24,5 +30,17 @@ export const getTransactionUTXOs = (hash: string) =>
 export const getTransactionMetadata = (hash: string) =>
   req(`/txs/${hash}/metadata`);
 
+export const getTransactionDelegations = (hash: string) =>
+  req(`/txs/${hash}/delegations`);
+
+export const getTransactionWithdrawals = (hash: string) =>
+  req(`/txs/${hash}/withdrawals`);
+
 export const getAssetInfo = (unit: string) =>
   req(`/assets/${unit}`);
+
+export const getDatum = (hash: string) =>
+  req(`/scripts/datum/${hash}`);
+
+export const getPoolMetadata = (id: string) =>
+  req(`/pools/${id}/metadata`);

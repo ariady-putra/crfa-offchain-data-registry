@@ -35,11 +35,12 @@ export type Transaction = {
   description: string;
   confidence: number | null;
   accounts: {
-    user: Account;
-    others: Account[];
+    user: Account[];
+    other: Account[];
   };
+  withdrawal_amount?: Asset;
   network_fee: Asset;
-  metadata: Record<string, unknown>[];
+  metadata: Record<string, any>[];
 };
 
 export type Account = {
@@ -50,5 +51,5 @@ export type Account = {
 
 export type Asset = {
   currency: string;
-  amount: number | string;
+  amount: number;
 };

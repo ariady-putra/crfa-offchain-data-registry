@@ -44,7 +44,7 @@ function _log(client: string,
   request: { path: string, time: number; },
   response: { body: string, time: number; },
   process: { uuid: string, time: number; }) {
-  console.log({ client, request, response, process });
+  // console.log({ client, request, response, process });
 }
 
 function _respondError(resp: Response, error: any, status: number = 500) {
