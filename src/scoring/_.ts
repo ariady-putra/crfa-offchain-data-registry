@@ -1,4 +1,5 @@
 import * as minswap from "./minswap_interaction/_";
+import * as wingriders from "./wingriders_interaction/_";
 
 import * as nosc from "./non_script_interaction/_";
 
@@ -11,6 +12,7 @@ type Scoring = {
 };
 const scoring: Record<string, Scoring> = {
   Minswap: minswap,
+  Wingriders: wingriders,
 };
 
 export async function calcConfidenceScoreOf(
@@ -55,8 +57,8 @@ export async function calcConfidenceScoreOf(
     });
 
   const highestConfidence = confidenceDesc[0];
-  // if the highest confidence is below threshold (ie, 50), then use fallback because the description is likely to be wrong
-  if (highestConfidence.confidence && highestConfidence.confidence <= 50) {
+  // if the highest confidence is below threshold (ie, 25-50), then use fallback because the description is likely to be wrong
+  if (highestConfidence && highestConfidence.confidence !== null && highestConfidence.confidence < 40) {
     const fallbackConfidence =
       probableProjects.length
         ? await Promise.all(
@@ -65,7 +67,7 @@ export async function calcConfidenceScoreOf(
               confidenceOf(
                 intermediaryTx,
                 scoring[project] ? [scoring[project].fallback] : [],
-                50,
+                99,
                 bfAddressInfo,
                 lucidAddressDetails,
                 txInfo,

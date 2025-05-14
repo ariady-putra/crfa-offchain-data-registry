@@ -8,7 +8,7 @@ export async function getAddressDetails(address: string) {
   const { getAddressDetails } = await import("@lucid-evolution/lucid");
   const addressDetails = getAddressDetails(address);
 
-  cache.set(key, addressDetails, 3600_000);
+  cache.set(key, addressDetails, 60_000_000);
   return addressDetails;
 }
 
@@ -20,7 +20,7 @@ export async function paymentCredentialOf(address: string) {
   const { paymentCredentialOf } = await import("@lucid-evolution/lucid");
   const paymentCredential = paymentCredentialOf(address);
 
-  cache.set(key, paymentCredential, 3600_000);
+  cache.set(key, paymentCredential, 60_000_000);
   return paymentCredential;
 }
 
@@ -32,7 +32,7 @@ export async function stakeCredentialOf(rewardAddress: string) {
   const { stakeCredentialOf } = await import("@lucid-evolution/lucid");
   const stakeCredential = stakeCredentialOf(rewardAddress);
 
-  cache.set(key, stakeCredential, 3600_000);
+  cache.set(key, stakeCredential, 60_000_000);
   return stakeCredential;
 }
 
@@ -44,7 +44,7 @@ export async function fromText(text: string) {
   const { fromText } = await import("@lucid-evolution/lucid");
   const hex = fromText(text);
 
-  cache.set(key, hex, 3600_000);
+  cache.set(key, hex, 60_000_000);
   return hex;
 }
 
@@ -56,6 +56,6 @@ export async function toText(hex: string) {
   const { toText } = await import("@lucid-evolution/lucid");
   const text = toText(hex);
 
-  cache.set(key, text, 3600_000);
+  cache.set(key, text, 60_000_000);
   return text;
 }

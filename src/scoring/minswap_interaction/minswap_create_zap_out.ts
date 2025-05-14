@@ -1,11 +1,11 @@
 // type: PASSTHROUGH | amm_dex
-// description: Created a withdraw XXX-YYY order on Minswap
+// description: Created a zap-out order on Minswap
 
 import { Account, Transaction } from "../../types/manifest";
 import { lucid } from "../../util/_";
 
-// user script address with positive LPs and non-script address with negative LPs
-// metadata { label:"674", json_metadata:{ msg:"Minswap: Withdraw Order" } }
+// user script address with positive asset1...44 and non-script address with negative asset1...44
+// metadata { label:"674", json_metadata:{ msg:"Minswap: Zap Out ..." } }
 const weighting = {
   userAccounts: .50,
   metadata: .50,
@@ -23,25 +23,15 @@ export async function score(
     calcW2(intermediaryTx.metadata),
   ]);
 
-  const [, pairTokens] = weights[0];
+  const description = "Created a zap-out order on Minswap";
+  const type = intermediaryTx.type === `${undefined}` ? "amm_dex" : intermediaryTx.type;
 
-  if (pairTokens) {
-    const description = `Created a withdraw ${pairTokens} order on Minswap`;
-    const type = intermediaryTx.type === `${undefined}` ? "amm_dex" : intermediaryTx.type;
+  const score = weights.reduce(
+    (sum, [weight]) => sum + weight,
+    0,
+  );
 
-    const score = weights.reduce(
-      (sum, [weight]) => sum + weight,
-      0,
-    );
-
-    return { type, description, score };
-  } else {
-    return {
-      type: intermediaryTx.type,
-      description: intermediaryTx.description,
-      score: 0,
-    };
-  }
+  return { type, description, score };
 }
 
 type Score = number;
@@ -49,8 +39,8 @@ type AdditionalData = any;
 type Calculation = [Score, AdditionalData];
 
 /**
- * There must be a user script address with positive LP amounts,
- * and a non-script address with negative LP amounts.
+ * There must be a user script address with positive asset1...44 amounts,
+ * and a non-script address with negative asset1...44 amounts.
  * 
  * @param user User Accounts
  * @returns [Score, AdditionalData]
@@ -88,7 +78,7 @@ async function calcW1(user: Account[]): Promise<Calculation> {
 }
 
 /**
- * There could be metadata with msg:"Minswap: Withdraw Order"
+ * There could be metadata with msg:"Minswap: Zap Out ..."
  * @param metadata Transaction Metadata
  * @returns [Score, AdditionalData]
  */
@@ -98,8 +88,8 @@ async function calcW2(metadata: Record<string, any>[]): Promise<Calculation> {
   let score = 0;
 
   const minswap = "Minswap";
-  const withdraw = "Withdraw";
-  const order = "Order";
+  const zap = "Zap";
+  const out = "Out";
 
   for (const { label, json_metadata } of metadata) {
     try {
@@ -115,19 +105,15 @@ async function calcW2(metadata: Record<string, any>[]): Promise<Calculation> {
             score += 1;
           }
 
-          if (message.includes(withdraw)) {
+          if (message.includes(zap)) {
             score += 2;
-          } else if (message.toLowerCase().includes(withdraw.toLowerCase())) {
+          } else if (message.toLowerCase().includes(zap.toLowerCase())) {
             score += 1;
           }
 
-          if (message.endsWith(order)) {
-            score += 10;
-          } else if (message.toLowerCase().endsWith(order.toLowerCase())) {
-            score += 5;
-          } else if (message.includes(order)) {
+          if (message.includes(out)) {
             score += 2;
-          } else if (message.toLowerCase().includes(order.toLowerCase())) {
+          } else if (message.toLowerCase().includes(out.toLowerCase())) {
             score += 1;
           }
 
@@ -139,5 +125,5 @@ async function calcW2(metadata: Record<string, any>[]): Promise<Calculation> {
     }
   }
 
-  return [weighting.metadata * score / 22, undefined];
+  return [weighting.metadata * score / 14, undefined];
 }

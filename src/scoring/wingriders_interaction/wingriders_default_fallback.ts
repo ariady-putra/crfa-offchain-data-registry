@@ -1,14 +1,12 @@
 // type: PASSTHROUGH | amm_dex
-// description: Executed an order on Minswap
+// description: Executed an order on Wingriders
 
 import { Account, Asset, Transaction } from "../../types/manifest";
 
-// other.role there's a Minswap address
-// no withdrawal
-// metadata { label:"674", json_metadata:{ msg:"Minswap: ..." } }
+// other.role there's a Wingriders address
+// metadata contains WingRiders
 const weighting = {
-  otherAccounts: .50,
-  withdrawal: .15,
+  otherAccounts: .65,
   metadata: .35,
 };
 
@@ -21,11 +19,10 @@ export async function score(
 ) {
   const weights = await Promise.all([
     calcW1(intermediaryTx.accounts.other),
-    calcW2(intermediaryTx.withdrawal_amount),
-    calcW3(intermediaryTx.metadata),
+    calcW2(intermediaryTx.metadata),
   ]);
 
-  const description = "Executed an order on Minswap";
+  const description = "Executed an order on Wingriders";
   const type = intermediaryTx.type === `${undefined}` ? "amm_dex" : intermediaryTx.type;
 
   const score = weights.reduce(
@@ -48,11 +45,11 @@ type Calculation = [Score, AdditionalData];
 async function calcW1(other: Account[]): Promise<Calculation> {
   if (!other.length) return [0, undefined];
 
-  const hasMinswap = other.find(
+  const hasWingriders = other.find(
     ({ role }) =>
-      role.includes("Minswap")
+      role.toUpperCase().includes("WINGRIDERS")
   );
-  if (hasMinswap) return [weighting.otherAccounts, undefined];
+  if (hasWingriders) return [weighting.otherAccounts, undefined];
 
   const hasScript = other.find(
     ({ role }) =>
@@ -64,29 +61,20 @@ async function calcW1(other: Account[]): Promise<Calculation> {
 }
 
 /**
- * The user will never withdraw as a the transaction is executed by some batchers.
- * @param withdrawal Whether is there some withdrawals associated with the user address
- * @returns [Score, AdditionalData]
- */
-async function calcW2(withdrawal?: Asset): Promise<Calculation> {
-  return [withdrawal ? 0 : weighting.withdrawal, undefined];
-}
-
-/**
- * There could be metadata with msg:"Minswap: ..."
+ * There could be metadata that contains WingRiders
  * @param metadata Transaction Metadata
  * @returns [Score, AdditionalData]
  */
-async function calcW3(metadata: Record<string, any>[]): Promise<Calculation> {
+async function calcW2(metadata: Record<string, any>[]): Promise<Calculation> {
   if (!metadata.length) return [0, undefined];
 
-  const minswapOrderExecuted = metadata.filter(
+  const wingriders = metadata.filter(
     ({ label, json_metadata }) => {
       return label === "674" && json_metadata?.msg?.find(
         (message: string) =>
-          message.startsWith("Minswap")
+          message.toUpperCase().includes("WINGRIDERS")
       );
     }
   );
-  return [weighting.metadata * minswapOrderExecuted.length / metadata.length, undefined];
+  return [weighting.metadata * wingriders.length / metadata.length, undefined];
 }

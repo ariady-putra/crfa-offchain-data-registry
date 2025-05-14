@@ -11,10 +11,19 @@ const dapps = file.readdirSync(dappsPath);
 
 const distinctProjects: Set<string> = new Set();
 const distinctCategories: Set<string> = new Set([
+  "unknown_activity",
+  // "self_transaction",
+  "catalyst_registration",
+  "catalyst_deregistration",
   "receive_ada",
+  "send_ada",
+  "receive_tokens",
   "send_tokens",
-  "stake_delegation",
+  "token_minting",
   "stake_registration",
+  "stake_delegation",
+  "multi_stake_delegation",
+  "setup_collateral",
   "yield_farming",
 ]);
 
@@ -159,10 +168,13 @@ export async function describeAddressTransaction(address: string, hash: string):
   }
   //#endregion
 
-  //#region Group AddressAmounts by PKH
+  //#region Group AddressAmounts by PKH / SKH
   for (const key of Object.keys(addressAmounts)) {
-    const { paymentCredential } = await lucid.getAddressDetails(key);
-    if (paymentCredential?.hash === addressDetails.paymentCredential?.hash) {
+    const { paymentCredential, stakeCredential } = await lucid.getAddressDetails(key);
+    if (
+      (paymentCredential && paymentCredential.hash === addressDetails.paymentCredential?.hash) ||
+      (stakeCredential && stakeCredential.hash === addressDetails.stakeCredential?.hash)
+    ) {
       userAddressAmounts[key] = addressAmounts[key];
     } else {
       otherAddressAmounts[key] = addressAmounts[key];
@@ -178,7 +190,7 @@ export async function describeAddressTransaction(address: string, hash: string):
   for (const { json_metadata } of metadata) {
     if (json_metadata?.msg?.length) {
       for (const project of distinctProjects) {
-        if (json_metadata.msg[0].includes(project)) {
+        if (json_metadata.msg[0].toUpperCase().includes(project.toUpperCase())) {
           probableProjects.add(project);
         }
       }
@@ -215,13 +227,15 @@ export async function describeAddressTransaction(address: string, hash: string):
   const convertAmountToNumber =
     (amount: bigint, decimals: number): number => {
       const t = BigInt(10 ** decimals);
-      return parseFloat(`${amount / t}.${`${(amount < 0n ? -amount : amount) % t}`.padStart(decimals, "0")}`);
+      const a = amount / t;
+      const b = (amount < 0n ? -amount : amount) % t;
+      return parseFloat(`${a ? a : (amount < 0n ? "-0" : "0")}.${`${b}`.padStart(decimals, "0")}`);
     };
 
   const getTotalAmounts =
-    async (address: string): Promise<Asset[]> => {
-      return await Promise.all(Object.keys(addressAmounts[address])
-        .filter((currency) => addressAmounts[address][currency] !== 0n)
+    async (amounts: Amounts): Promise<Asset[]> => {
+      return await Promise.all(Object.keys(amounts)
+        .filter((currency) => amounts[currency] !== 0n)
         .map(async (currency) => {
           let fromUnit = isLovelaceOrADA(currency)
             ? { metadata: { name: currency, decimals: 6 } }
@@ -232,7 +246,7 @@ export async function describeAddressTransaction(address: string, hash: string):
 
           return {
             currency: fromUnit.metadata?.name ?? fromUnit.onchain_metadata?.name ?? fromUnit.fingerprint ?? currency,
-            amount: convertAmountToNumber(addressAmounts[address][currency], decimals),
+            amount: convertAmountToNumber(amounts[currency], decimals),
           };
         }),
       );
@@ -245,7 +259,7 @@ export async function describeAddressTransaction(address: string, hash: string):
           return {
             address,
             role: addressRole ?? scDesc[address]?.role ?? `Unknown ${await isKeyAddress(address) ? "Address" : "Script"}`,
-            total: await getTotalAmounts(address),
+            total: await getTotalAmounts(addressAmounts[address]),
           };
         }),
       );

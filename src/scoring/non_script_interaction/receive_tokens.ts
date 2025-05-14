@@ -1,20 +1,22 @@
-// type: send_tokens
-// description: Sent #.## TokenA, #.## TokenB and #.## TokenC
+// type: receive_tokens
+// description: Received #.## TokenA, #.## TokenB and #.## TokenC
 
-import { Account, Transaction } from "../../types/manifest";
+import { Account, Asset, Transaction } from "../../types/manifest";
 import { joinWords } from "../../util/_";
 
-// user.total with negative amounts
+// user.total with positive amounts
 // other.role are Unknown Addresses
+// no withdrawal
 // no metadata
 const weighting = {
-  userAccounts: .50,
-  otherAccounts: .40,
+  userAccounts: .40,
+  otherAccounts: .30,
+  withdrawal: .20,
   metadata: .10,
 };
 
 export async function score(
-  { accounts, metadata, network_fee }: Transaction,
+  { accounts, metadata, withdrawal_amount, network_fee }: Transaction,
   bfAddressInfo: Record<string, any>,
   lucidAddressDetails: Record<string, any>,
   txInfo: Record<string, any>,
@@ -23,7 +25,8 @@ export async function score(
   const weights = await Promise.all([
     calcW1(accounts.user),
     calcW2(accounts.other),
-    calcW3(metadata),
+    calcW3(withdrawal_amount),
+    calcW4(metadata),
   ]);
 
   const totalTokens: Record<string, number> = {
@@ -35,12 +38,8 @@ export async function score(
 
   Object.keys(inputTokens).forEach(
     (currency) => {
-      // if (currency === "ADA")
-      //   totalTokens[currency] = (totalTokens[currency] ?? 0) + inputTokens[currency];
-      // else
-      //   totalTokens[currency] = (totalTokens[currency] ?? 0) - inputTokens[currency];
       if (currency !== "ADA")
-        totalTokens[currency] = (totalTokens[currency] ?? 0) - inputTokens[currency];
+        totalTokens[currency] = (totalTokens[currency] ?? 0) + inputTokens[currency];
     });
   // Object.keys(outputTokens).forEach(
   //   (currency) => {
@@ -48,7 +47,7 @@ export async function score(
   //       totalTokens[currency] = (totalTokens[currency] ?? 0) + outputTokens[currency];
   //   });
 
-  const sendTokens = Object.keys(totalTokens)
+  const receiveTokens = Object.keys(totalTokens)
     .filter(
       (currency) =>
         totalTokens[currency] > 0
@@ -58,8 +57,8 @@ export async function score(
         `${totalTokens[currency]} ${currency}${currency.toLowerCase().endsWith("token") && totalTokens[currency] > 1 ? "s" : ""}`
     );
 
-  const description = `Sent ${joinWords(sendTokens)}`.trim();
-  const type = "send_tokens";
+  const description = `Received ${joinWords(receiveTokens)}`.trim();
+  const type = "receive_tokens";
 
   const score = weights.reduce(
     (sum, [weight]) => sum + weight,
@@ -74,7 +73,7 @@ type AdditionalData = any;
 type Calculation = [Score, AdditionalData];
 
 /**
- * Input amounts should be negative.
+ * Input amounts should be positive.
  * @param user User Accounts
  * @returns [Score, AdditionalData]
  */
@@ -93,16 +92,17 @@ async function calcW1(user: Account[]): Promise<Calculation> {
     {} as Record<string, number>,
   );
 
-  // filter out ADA to differentiate with send_ada
-  const currencies = Object.keys(assets).filter((currency) => currency !== "ADA" && assets[currency]);
-  if (!currencies.length) return [0, assets];
+  const amounts = Object.values(assets);
+  if (!amounts.length) return [0, assets];
 
-  const negativesCount = currencies.filter((currency) => assets[currency] < 0).length;
-  return [weighting.userAccounts * negativesCount / currencies.length, assets];
+  const negativesCount = amounts.filter((amount) => amount > 0).length;
+  return [amounts.length > 1 // to differentiate with receive_ada
+    ? weighting.userAccounts * negativesCount / amounts.length
+    : 0, assets];
 }
 
 /**
- * Output amounts should be positive.
+ * Output amounts should be negative.
  * @param other Other Accounts
  * @returns [Score, AdditionalData]
  */
@@ -121,20 +121,28 @@ async function calcW2(other: Account[]): Promise<Calculation> {
     {} as Record<string, number>,
   );
 
-  const amounts = Object.values(assets);
-  if (!amounts.length) return [0, assets];
+  // filter out ADA to differentiate with receive_ada
+  const currencies = Object.keys(assets).filter((currency) => currency !== "ADA" && assets[currency]);
+  if (!currencies.length) return [0, assets];
 
-  const positivesCount = amounts.filter((amount) => amount > 0).length;
-  return [amounts.length > 1 // to differentiate with send_ada
-    ? weighting.otherAccounts * positivesCount / amounts.length
-    : 0, assets];
+  const negativesCount = currencies.filter((currency) => assets[currency] < 0).length;
+  return [weighting.otherAccounts * negativesCount / currencies.length, assets];
 }
 
 /**
- * The user can optionally put some arbitrary metadata though.
+ * It is impossible to withdraw as a beneficiary, the sender may withdraw their stake rewards but not the receivers.
+ * @param withdrawal Whether is there some withdrawals associated with the user address
+ * @returns [Score, AdditionalData]
+ */
+async function calcW3(withdrawal?: Asset): Promise<Calculation> {
+  return [withdrawal ? 0 : weighting.withdrawal, undefined];
+}
+
+/**
+ * The sender can optionally put some arbitrary metadata though.
  * @param metadata Transaction Metadata
  * @returns [Score, AdditionalData]
  */
-async function calcW3(metadata: Record<string, any>[]): Promise<Calculation> {
+async function calcW4(metadata: Record<string, any>[]): Promise<Calculation> {
   return [metadata.length ? 0 : weighting.metadata, undefined];
 }

@@ -1,18 +1,17 @@
-// type: stake_delegation
-// description: Delegated stake to pool: {[TICKER] PoolName | PoolName} | Stake Delegation
+// type: multi_stake_delegation
+// description: Delegated stake to multiple pools
 
-import { Account, Asset, Transaction } from "../../types/manifest";
-import { bf, lucid } from "../../util/_";
+import { Account, Transaction } from "../../types/manifest";
 
-// txInfo.delegation_count > 0
+// txInfo.delegation_count > 1
 // user.total currency:ADA amount:-#.##
 // other.role.length === 0
-// no metadata
+// metadata label:6862
 const weighting = {
   stakeDelegation: .50,
-  userAccounts: .35,
+  userAccounts: .15,
   otherAccounts: .10,
-  metadata: .05,
+  metadata: .25,
 };
 
 export async function score(
@@ -26,22 +25,11 @@ export async function score(
     calcW0(txInfo, lucidAddressDetails.stakeCredential?.hash),
     calcW1(accounts.user),
     calcW2(accounts.other),
-    calcW3(metadata),
+    calcW3(metadata, txInfo),
   ]);
 
-  const [, poolMetadata] = weights[0];
-  const poolTicker =
-    poolMetadata?.ticker
-      ? `[${poolMetadata.ticker}]`
-      : undefined;
-  const poolName =
-    poolMetadata?.name
-      ? (poolTicker ?
-        `${poolTicker} ${poolMetadata.name}`
-        : poolMetadata.name)
-      : undefined;
-  const description = poolName ? `Delegated stake to pool: ${poolName}` : "Stake Delegation";
-  const type = "stake_delegation";
+  const description = "Delegated stake to multiple pools";
+  const type = "multi_stake_delegation";
 
   const score = weights.reduce(
     (sum, [weight]) => sum + weight,
@@ -56,28 +44,12 @@ type AdditionalData = any;
 type Calculation = [Score, AdditionalData];
 
 /**
- * Delegation count must be greater than 0. There may or may not be stake certs.
+ * Delegation count must be greater than 1
  * @param txInfo Blockfrost TxInfo
  * @param stakeAddress The User Bech32 StakeAddress
  */
 async function calcW0(txInfo: Record<string, any>, stakeAddress?: string): Promise<Calculation> {
-  if (!stakeAddress) return [0, undefined];
-
-  try {
-    if (txInfo.delegation_count) {
-      const delegations = await bf.getTransactionDelegations(txInfo.hash);
-      for (const { address, pool_id } of delegations) {
-        const sk = await lucid.stakeCredentialOf(address);
-        if (sk?.hash === stakeAddress) {
-          const poolMetadata = await bf.getPoolMetadata(pool_id);
-          return [weighting.stakeDelegation, poolMetadata];
-        }
-      }
-    }
-    return [weighting.stakeDelegation / 2, undefined]; // has delegation_count, but somehow failed to get pool metadata
-  } catch {
-    return [0, undefined];
-  }
+  return [stakeAddress && txInfo.delegation_count > 1 ? weighting.stakeDelegation : 0, undefined];
 }
 
 /**
@@ -126,10 +98,30 @@ async function calcW2(other: Account[]): Promise<Calculation> {
 }
 
 /**
- * The sender can optionally put some arbitrary metadata though.
+ * label:6862 with multiple pools.
  * @param metadata Transaction Metadata
+ * @param txInfo Blockfrost TxInfo
  * @returns [Score, AdditionalData]
  */
-async function calcW3(metadata: Record<string, any>[]): Promise<Calculation> {
-  return [metadata.length ? 0 : weighting.metadata, undefined];
+async function calcW3(metadata: Record<string, any>[], txInfo: Record<string, any>): Promise<Calculation> {
+  if (!metadata.length) return [0, undefined];
+
+  const label6862 = metadata.filter(
+    ({ label }) =>
+      label === "6862"
+  );
+  if (!label6862.length) return [0, undefined];
+
+  const withPools = label6862.find(
+    ({ json_metadata }) =>
+      json_metadata?.pools?.length > 1
+  );
+  const poolCount = withPools?.json_metadata.pools.length ?? 0;
+  if (!poolCount) return [0, undefined];
+
+  const min = Math.min(poolCount, txInfo.delegation_count);
+  const max = Math.max(poolCount, txInfo.delegation_count);
+  if (!max) return [0, undefined];
+
+  return [weighting.metadata * min / max / label6862.length, undefined];
 }

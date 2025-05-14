@@ -1,16 +1,16 @@
-// type: yield_farming | PASSTHROUGH
-// description: Staked {TokenName | liquidity} on Minswap
+// type: PASSTHROUGH | amm_dex
+// description: Created a withdraw {LP Tokens | liquidity} order on Minswap
 
 import { Account, Transaction } from "../../types/manifest";
 import { bf, lucid } from "../../util/_";
 
-// user.total with negative asset100000000000000000000000000000000000044
-// other.role there's a Minswap Yield Farming... with positive asset100000000000000000000000000000000000044
-// metadata { label:"674", json_metadata:{ msg:"Minswap: .. Stake liquidity" } }
+// user.total with positive asset100000000000000000000000000000000000044
+// other.role there's a Minswap Yield Farming... with negative asset100000000000000000000000000000000000044
+// metadata { label:"674", json_metadata:{ msg:"Minswap: ... Withdraw liquidity" } }
 const weighting = {
-  userAccounts: .40,
-  otherAccounts: .50,
-  metadata: .10,
+  userAccounts: .10,
+  otherAccounts: .40,
+  metadata: .50,
 };
 
 export async function score(
@@ -26,10 +26,13 @@ export async function score(
     calcW3(intermediaryTx.metadata),
   ]);
 
-  const [, tokenName] = weights[1];
+  const [, qty] = weights[0];
+  const [, farm] = weights[1];
 
-  const description = `Staked ${tokenName ?? "liquidity"} on Minswap`;
-  const type = tokenName ? "yield_farming" : intermediaryTx.type;
+  const description = `Created a withdraw ${qty && farm
+    ? `${qty} LP Token${qty > 1 ? "s" : ""} from ${farm} farm`
+    : "liquidity order"} on Minswap`;
+  const type = qty && farm ? "yield_farming" : intermediaryTx.type;
 
   const score = weights.reduce(
     (sum, [weight]) => sum + weight,
@@ -44,36 +47,32 @@ type AdditionalData = any;
 type Calculation = [Score, AdditionalData];
 
 /**
- * There should be an asset100000000000000000000000000000000000044 with negative amount.
+ * There should be positive asset100000000000000000000000000000000000044.
  * @param user User Accounts
  * @returns [Score, AdditionalData]
  */
 async function calcW1(user: Account[]): Promise<Calculation> {
-  const assets = user.reduce(
-    (sum, { total }) => {
+  const lpTokens = user.reduce(
+    (sum, { total }) =>
       total.reduce(
         (sum, { currency, amount }) => {
-          if ((currency.endsWith(" LP") || (currency.startsWith("asset") && currency.length === 44)) && amount < 0)
-            sum[currency] = (sum[currency] ?? 0) + amount;
+          if ((currency.endsWith(" LP") || (currency.startsWith("asset") && currency.length === 44)) && amount > 0)
+            sum += amount;
           return sum;
         },
         sum,
-      );
-      return sum;
-    },
-    {} as Record<string, number>,
+      ),
+    0,
   );
-  return [Object.keys(assets).length ? weighting.userAccounts : 0, undefined];
+  return [lpTokens ? weighting.userAccounts : 0, lpTokens];
 }
 
 /**
- * There should be a Minswap Yield Farming... with positive asset100000000000000000000000000000000000044,
+ * There should be a Minswap Yield Farming... with negative asset100000000000000000000000000000000000044,
  * if there's no other account then score:0
  * 
- * The Minswap Yield Farming contains the token name information in the output datum.
- * 
  * @param other Other Accounts
- * @param txUTXOs Blockfrost Transaction UTXOs
+ * @param txUTXOs Blockfrost TransactionUTXOs
  * @returns [Score, AdditionalData]
  */
 async function calcW2(
@@ -82,29 +81,37 @@ async function calcW2(
 ): Promise<Calculation> {
   if (!other.length) return [0, undefined];
 
-  let stakedToken: string | undefined = undefined;
-  for (const { address, role } of other) {
+  const yieldFarming = other.find(
+    ({ role, total }) =>
+      role.startsWith("Minswap Yield Farming") && total.find(
+        ({ currency, amount }) =>
+          (currency.endsWith(" LP") || (currency.startsWith("asset") && currency.length === 44)) && amount < 0
+      )
+  );
+  if (!yieldFarming) return [0, undefined];
+
+  let farmName: string | undefined = undefined;
+  for (const { address } of other) {
     try {
-      if (role.startsWith("Minswap Yield Farming")) {
-        const { data_hash } = txUTXOs.outputs.find(
+      if (address === yieldFarming.address) {
+        const { data_hash } = txUTXOs.inputs.find(
           (input: Record<string, any>) =>
             input.address === address
         );
 
         const { json_value } = await bf.getDatum(data_hash);
-        stakedToken = await lucid.toText(json_value.fields[3].list[0].fields[0].fields[1].bytes);
-        if (stakedToken) break;
+        farmName = await lucid.toText(json_value.fields[3].list[0].fields[0].fields[1].bytes);
+        if (farmName) break;
       }
     } catch {
       continue;
     }
   }
-
-  return [stakedToken ? weighting.otherAccounts : 0, stakedToken];
+  return [farmName ? weighting.otherAccounts : 0, farmName];
 }
 
 /**
- * There should be metadata with msg:"Minswap: .. Stake liquidity"
+ * There should be metadata with msg:"Minswap: ... Withdraw liquidity"
  * @param metadata Transaction Metadata
  * @returns [Score, AdditionalData]
  */
@@ -114,7 +121,8 @@ async function calcW3(metadata: Record<string, any>[]): Promise<Calculation> {
   let score = 0;
 
   const minswap = "Minswap";
-  const stakeLiquidity = "Stake liquidity";
+  const withdraw = "Withdraw";
+  const liquidity = "liquidity";
 
   for (const { label, json_metadata } of metadata) {
     try {
@@ -130,14 +138,16 @@ async function calcW3(metadata: Record<string, any>[]): Promise<Calculation> {
             score += 1;
           }
 
-          if (message.endsWith(stakeLiquidity)) {
+          if (message.includes(withdraw)) {
             score += 10;
-          } else if (message.toLowerCase().endsWith(stakeLiquidity.toLowerCase())) {
-            score += 5;
-          } else if (message.includes(stakeLiquidity)) {
-            score += 2;
-          } else if (message.toLowerCase().includes(stakeLiquidity.toLowerCase())) {
+          } else if (message.toLowerCase().includes(withdraw.toLowerCase())) {
             score += 1;
+          }
+
+          if (message.endsWith(liquidity)) {
+            score += 10;
+          } else if (message.includes(liquidity)) {
+            score += 2;
           }
 
           if (score) break;
@@ -148,5 +158,5 @@ async function calcW3(metadata: Record<string, any>[]): Promise<Calculation> {
     }
   }
 
-  return [weighting.metadata * score / 20, undefined];
+  return [weighting.metadata * score / 30, undefined];
 }

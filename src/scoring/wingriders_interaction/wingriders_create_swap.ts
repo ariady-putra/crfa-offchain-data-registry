@@ -1,11 +1,11 @@
 // type: PASSTHROUGH | amm_dex
-// description: Created a swap transaction on Minswap
+// description: Created a swap transaction on Wingriders
 
 import { Account, Transaction } from "../../types/manifest";
 import { lucid } from "../../util/_";
 
 // user script address with positive amounts and non-script address with negative amounts
-// metadata { label:"674", json_metadata:{ msg:"Minswap: Market Order" } }
+// metadata { label:"674", json_metadata:{ msg:"WingRiders: ... Swap" } }
 const weighting = {
   userAccounts: .75,
   metadata: .25,
@@ -23,7 +23,7 @@ export async function score(
     calcW2(intermediaryTx.metadata),
   ]);
 
-  const description = "Created a swap transaction on Minswap";
+  const description = "Created a swap transaction on Wingriders";
   const type = intermediaryTx.type === `${undefined}` ? "amm_dex" : intermediaryTx.type;
 
   const score = weights.reduce(
@@ -54,13 +54,13 @@ async function calcW1(user: Account[]): Promise<Calculation> {
       const { paymentCredential, stakeCredential } = await lucid.getAddressDetails(account.address);
       if (paymentCredential?.type === "Script" || stakeCredential?.type === "Script") {
         for (const { currency, amount } of account.total) {
-          const maybeLP = currency.endsWith(" LP");
+          const maybeLP = currency.includes("-LPT-");
           if (maybeLP || amount < 0) continue; // skip LP Tokens or negative amounts
           scriptTotal[currency] = (scriptTotal[currency] ?? 0) + amount;
         }
       } else {
         for (const { currency, amount } of account.total) {
-          const maybeLP = currency.endsWith(" LP");
+          const maybeLP = currency.includes("-LPT-");
           if (maybeLP || amount > 0) continue; // skip LP Tokens or positive amounts
           nonScriptTotal[currency] = (nonScriptTotal[currency] ?? 0) + amount;
         }
@@ -74,18 +74,49 @@ async function calcW1(user: Account[]): Promise<Calculation> {
 }
 
 /**
- * There should be metadata with msg:"Minswap: Market Order"
+ * There should be metadata with msg:"WingRiders: ... Swap"
  * @param metadata Transaction Metadata
  * @returns [Score, AdditionalData]
  */
 async function calcW2(metadata: Record<string, any>[]): Promise<Calculation> {
   if (!metadata.length) return [0, undefined];
 
-  const minswapMarketOrderCount = metadata.filter(
-    ({ label, json_metadata }) => {
-      const message = json_metadata?.msg;
-      return label === "674" && message && message.length && message[0] === "Minswap: Market Order";
+  let score = 0;
+
+  const wingriders = "WingRiders";
+  const swap = "Swap";
+
+  for (const { label, json_metadata } of metadata) {
+    try {
+      if (label === "674") {
+        for (const message of json_metadata?.msg) {
+          if (message.startsWith(wingriders)) {
+            score += 10;
+          } else if (message.toLowerCase().startsWith(wingriders.toLowerCase())) {
+            score += 5;
+          } else if (message.includes(wingriders)) {
+            score += 2;
+          } else if (message.toLowerCase().includes(wingriders.toLowerCase())) {
+            score += 1;
+          }
+
+          if (message.endsWith(swap)) {
+            score += 10;
+          } else if (message.toLowerCase().endsWith(swap.toLowerCase())) {
+            score += 5;
+          } else if (message.includes(swap)) {
+            score += 2;
+          } else if (message.toLowerCase().includes(swap.toLowerCase())) {
+            score += 1;
+          }
+
+          if (score) break;
+        }
+      }
+    } catch {
+      continue;
     }
-  ).length;
-  return [weighting.metadata * minswapMarketOrderCount / metadata.length, undefined];
+  }
+
+  return [weighting.metadata * score / 20, undefined];
 }

@@ -3,7 +3,7 @@ import { cache } from "./_";
 
 const { BF_PID, BF_URL } = env;
 
-async function req(path: string) {
+async function req(path: string, cacheTimeout: number = 60_000_000) {
   const key = `bf.${path}`;
   const data = cache.get(key);
   if (data) return data;
@@ -11,7 +11,7 @@ async function req(path: string) {
   const resp = await fetch(`${BF_URL}${path}`, { headers: { project_id: `${BF_PID}` } });
   const json = await resp.json();
 
-  cache.set(key, json, 60_000); // 1 minute stale
+  cache.set(key, json, cacheTimeout);
   return json;
 }
 
@@ -19,7 +19,7 @@ export const getAddressInfo = (address: string) =>
   req(`/addresses/${address}`);
 
 export const getAddressTransactions = (address: string) =>
-  req(`/addresses/${address}/transactions?order=desc`);
+  req(`/addresses/${address}/transactions?order=desc`, 60_000);
 
 export const getTransactionInfo = (hash: string) =>
   req(`/txs/${hash}`);
